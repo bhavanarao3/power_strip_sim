@@ -14,9 +14,8 @@ This package simulates a **power strip** controlled via **ROS2** and **MQTT**. I
 Place the package inside the `src/` folder of your ROS2 workspace:  
 ```bash
 cd ~/ros2_ws/src
-git clone git@github.com:bhavanarao3/power_strip_sim.git
+git clone <repository-link> power_strip_sim
 ```
-Also, add a include/power_strip_sim/ directory.
 
 Navigate to your workspace root, build, and source:  
 ```bash
@@ -44,6 +43,10 @@ Type commands in the format:
 ON1   → Turns Outlet 1 ON  
 OFF2  → Turns Outlet 2 OFF  
 TOGGLE3 → Toggles Outlet 3  
+ON ALL → Turns all outlets ON
+OFF ALL → Turns all outlets OFF
+TOGGLE ALL → Toggles all outlets
+STATUS3 → Displays outlet3 status
 STATUS  → Displays outlet statuses  
 ```
 
