@@ -21,7 +21,7 @@ GREEN = (0, 255, 0)
 
 # Outlet positions for 4 outlets
 outlet_positions = [(100, 150), (250, 150), (400, 150), (550, 150)]
-outlet_states = [False] * 4  # Now supports 4 outlets
+outlet_states = [False] * 4  # Supports 4 outlets
 
 class PowerStripVisualizer(Node):
     def __init__(self):
@@ -44,9 +44,21 @@ class PowerStripVisualizer(Node):
         command = msg.payload.decode().strip().upper()
         self.get_logger().info(f"Received command: {command}")
 
-        if command.startswith("ON") or command.startswith("OFF") or command.startswith("TOGGLE"):
+        if command == "ON ALL":
+            for i in range(len(outlet_states)):
+                outlet_states[i] = True
+
+        elif command == "OFF ALL":
+            for i in range(len(outlet_states)):
+                outlet_states[i] = False
+
+        elif command == "TOGGLE ALL":
+            for i in range(len(outlet_states)):
+                outlet_states[i] = not outlet_states[i]
+
+        elif command.startswith("ON") or command.startswith("OFF") or command.startswith("TOGGLE"):
             try:
-                outlet = int(command[-1]) - 1  # Extract outlet index (1-based)
+                outlet = int(command[-1]) - 1
                 if 0 <= outlet < len(outlet_states):
                     if command.startswith("ON"):
                         outlet_states[outlet] = True
@@ -54,8 +66,6 @@ class PowerStripVisualizer(Node):
                         outlet_states[outlet] = False
                     elif command.startswith("TOGGLE"):
                         outlet_states[outlet] = not outlet_states[outlet]
-
-                    self.get_logger().info(f"Outlet {outlet+1} is now {'ON' if outlet_states[outlet] else 'OFF'}")
                 else:
                     self.get_logger().error("Invalid outlet number")
             except ValueError:
@@ -65,12 +75,8 @@ def draw_scene():
     screen.fill(WHITE)
 
     for i, (x, y) in enumerate(outlet_positions):
-        # Draw the outlet box
-        pygame.draw.rect(screen, BLACK, (x - 20, y, 40, 20))
-
-        # Draw the light bulb above the outlet
-        color = GREEN if outlet_states[i] else RED
-        pygame.draw.circle(screen, color, (x, y - 30), 10)
+        pygame.draw.rect(screen, BLACK, (x - 20, y, 40, 20))  # Outlet box
+        pygame.draw.circle(screen, GREEN if outlet_states[i] else RED, (x, y - 30), 10)  # Indicator
 
     pygame.display.flip()
 
