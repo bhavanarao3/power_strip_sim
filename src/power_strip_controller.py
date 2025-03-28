@@ -12,12 +12,36 @@ class PowerStripController(Node):
         self.set_client = self.create_client(SetOutlet, '/set_outlet_state')
         self.get_client = self.create_client(GetOutlet, '/get_outlet_status')
 
+        # Store the last known state to avoid redundant commands
+        self.outlet_states = [None] * 4  # Unknown state initially
+
+    def get_outlet_status(self, outlet):
+        """ Query the current status of a specific outlet """
+        req = GetOutlet.Request()
+        req.outlet = outlet
+
+        self.get_client.wait_for_service()
+        future = self.get_client.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+
+        if future.result():
+            self.outlet_states[outlet] = future.result().state  # Update local state
+            return future.result().state
+        else:
+            print(f"Failed to get status for outlet {outlet + 1}")
+            return None
+
     def send_command(self, outlet, state):
-        """ Send ON/OFF command to fake Arduino """
-        if outlet not in range(4):  # Support for 4 outlets
-            print("Invalid outlet number. Use 1, 2, 3, or 4.")
-            return
-        
+        """ Send ON/OFF command only if it changes the current state """
+        current_state = self.get_outlet_status(outlet)
+
+        if current_state is None:
+            return  # Ignore if status retrieval failed
+
+        if current_state == state:
+            print(f"Outlet {outlet + 1} is already {'ON' if state else 'OFF'}, ignoring redundant command.")
+            return  # Ignore redundant command
+
         req = SetOutlet.Request()
         req.outlet = outlet
         req.state = state
@@ -27,49 +51,39 @@ class PowerStripController(Node):
         rclpy.spin_until_future_complete(self, future)
 
         if future.result().success:
+            self.outlet_states[outlet] = state  # Update local state
             print(f"Outlet {outlet + 1} set to {'ON' if state else 'OFF'}")
         else:
             print("Failed to set outlet state.")
 
     def toggle_command(self, outlet):
         """ Toggle command (queries current state and switches it) """
-        if outlet not in range(4):  
-            print("Invalid outlet number. Use 1, 2, 3, or 4.")
-            return
-        
-        req = GetOutlet.Request()
-        req.outlet = outlet
+        current_state = self.get_outlet_status(outlet)
 
-        self.get_client.wait_for_service()
-        future = self.get_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future)
+        if current_state is None:
+            return  # Ignore if status retrieval failed
 
-        if future.result():
-            new_state = not future.result().state
-            self.send_command(outlet, new_state)
-        else:
-            print("Failed to get outlet status.")
+        new_state = not current_state
+        self.send_command(outlet, new_state)
 
     def query_status(self):
         """ Query and display the status of all outlets """
         print("Checking status of all outlets...")
         for i in range(4):  # 4 outlets
-            req = GetOutlet.Request()
-            req.outlet = i
-
-            self.get_client.wait_for_service()
-            future = self.get_client.call_async(req)
-            rclpy.spin_until_future_complete(self, future)
-
-            if future.result():
-                state = "ON" if future.result().state else "OFF"
-                print(f"Outlet {i + 1} is {state}")
-            else:
-                print(f"Failed to get status for outlet {i + 1}")
+            state = self.get_outlet_status(i)
+            if state is not None:
+                print(f"Outlet {i + 1} is {'ON' if state else 'OFF'}")
 
 def parse_command(command):
     """ Parse user input and return (action, outlet) """
     command = command.strip().upper()
+
+    if command == "ON ALL":
+        return "ON_ALL", None
+    if command == "OFF ALL":
+        return "OFF_ALL", None
+    if command == "TOGGLE ALL":
+        return "TOGGLE_ALL", None
 
     if command.startswith("ON") and len(command) == 3:
         outlet = command[2]
@@ -85,6 +99,11 @@ def parse_command(command):
         outlet = command[6]
         if outlet.isdigit() and int(outlet) in [1, 2, 3, 4]:
             return "TOGGLE", int(outlet) - 1
+
+    if command.startswith("STATUS") and len(command) == 7:
+        outlet = command[6]
+        if outlet.isdigit() and int(outlet) in [1, 2, 3, 4]:
+            return "STATUS_SINGLE", int(outlet) - 1
 
     if command == "STATUS":
         return "STATUS", None
@@ -111,10 +130,23 @@ def main(args=None):
                 node.toggle_command(outlet)
             elif action == "STATUS":
                 node.query_status()
+            elif action == "STATUS_SINGLE":
+                state = node.get_outlet_status(outlet)
+                if state is not None:
+                    print(f"Outlet {outlet + 1} is {'ON' if state else 'OFF'}")
+            elif action == "ON_ALL":
+                for i in range(4):  
+                    node.send_command(i, True)
+            elif action == "OFF_ALL":
+                for i in range(4):  
+                    node.send_command(i, False)
+            elif action == "TOGGLE_ALL":
+                for i in range(4):  
+                    node.toggle_command(i)
             elif action == "EXIT":
                 break
             else:
-                print("Invalid command. Use ON1, OFF2, TOGGLE1, STATUS, or EXIT.")
+                print("Invalid command. Use ON1, OFF2, TOGGLE1, STATUS, ON ALL, OFF ALL, TOGGLE ALL, or EXIT.")
 
         except Exception as e:
             print(f"Error: {e}")
